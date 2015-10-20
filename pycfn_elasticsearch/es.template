@@ -1,0 +1,127 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Resources": {
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "awses",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "es:*",
+                  "Resource": "arn:aws:es:*:*:*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "LambdaCustomResourceElasticsearch": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "es.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": "elelsee-lambda",
+          "S3Key": "customresource-aws-es/es.zip"
+        },
+        "Runtime": "python2.7",
+        "Timeout": "60"
+      }
+    },
+    "ElasticsearchDomain": {
+      "Type": "Custom::ElasticsearchDomain",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "LambdaCustomResourceElasticsearch",
+            "Arn"
+          ]
+        },
+        "DomainName": "testdomain5",
+        "ElasticsearchClusterConfig": {
+          "InstanceType": "t2.micro.elasticsearch",
+          "InstanceCount": 1,
+          "DedicatedMasterEnabled": "False",
+          "ZoneAwarenessEnabled": "False"
+        },
+        "EBSOptions": {
+          "EBSEnabled": "True",
+          "VolumeType": "standard",
+          "VolumeSize": 20
+        },
+        "AccessPolicies": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "es:*",
+              "Principal": "*",
+              "Effect": "Allow",
+              "Condition": {
+                "IpAddress": {
+                  "aws:SourceIp": [
+                    "66.192.34.156/32"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ElasticsearchArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ElasticsearchDomain",
+          "ARN"
+        ]
+      }
+    }
+  }
+}
