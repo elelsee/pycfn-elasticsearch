@@ -11,7 +11,6 @@ log.setLevel(logging.DEBUG)
 import boto3
 import json
 from pycfn_custom_resource.lambda_backed import CustomResource
-import os
 
 
 def convert_type_bool(arg):
