@@ -51,6 +51,19 @@
                 }
               ]
             }
+          },
+          {
+            "PolicyName": "awslambda",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "lambda:*",
+                  "Resource": "arn:aws:lambda:*:*:*"
+                }
+              ]
+            }
           }
         ]
       }
@@ -67,10 +80,10 @@
         },
         "Code": {
           "S3Bucket": "elelsee-lambda",
-          "S3Key": "customresource-aws-es/es.zip"
+          "S3Key": "customresource-elasticsearch/handler.zip"
         },
         "Runtime": "python2.7",
-        "Timeout": "60"
+        "Timeout": "300"
       }
     },
     "ElasticsearchDomain": {
@@ -82,7 +95,6 @@
             "Arn"
           ]
         },
-        "DomainName": "testdomain5",
         "ElasticsearchClusterConfig": {
           "InstanceType": "t2.micro.elasticsearch",
           "InstanceCount": 1,

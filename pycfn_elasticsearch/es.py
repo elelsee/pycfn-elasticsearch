@@ -10,7 +10,11 @@ log.setLevel(logging.DEBUG)
 
 import boto3
 import json
+import random
+
+from botocore.exceptions import ClientError
 from pycfn_custom_resource.lambda_backed import CustomResource
+from string import ascii_lowercase
 
 
 def convert_type_bool(arg):
@@ -18,12 +22,39 @@ def convert_type_bool(arg):
 
 
 class ElasticsearchCustomResource(CustomResource):
-    def __init__(self, event):
-        super(ElasticsearchCustomResource, self).__init__(event)
+    def __init__(self, event, context):
+        super(ElasticsearchCustomResource, self).__init__(event, context)
 
-    def create(self):
+    def describe_domain(self):
+        client = boto3.client('es', region_name=self._region)
+        domain_name = self.result_text.get('DomainName')
+        try:
+            response = client.describe_elasticsearch_domain(DomainName=domain_name)
+            return response.get('DomainStatus')
+        except ClientError:
+            e = sys.exc_info()[1]
+            message = x.response['Error']['Message']
+            if self.requesttype == "Delete" and message.startswith('Domain not found'):
+                return { 'Processing': False }
+            else:
+                raise
+
+    def get_status(self):
+        log.info(u"Polling status for %s-%s", self.logicalresourceid, self.requesttype)
+        domain_status = self.describe_domain()
+        processing = domain_status.get('Processing')
+        if not processing:
+            self.processing = False
+        return self.result_text
+
+    def get_domain_name(self):
+        return ''.join(random.choice(ascii_lowercase) for _ in range(15))
+
+    def create_es(self):
         client = boto3.client('es', region_name=self._region)
         domain_name = self._resourceproperties.get('DomainName')
+        domain_name = domain_name if domain_name else self.get_domain_name()
+        log.info(u"Command %s-%s using Domain Name %s", self.logicalresourceid, self.requesttype, domain_name)
         cluster_config = self._resourceproperties.get('ElasticsearchClusterConfig')
         ebs_options = self._resourceproperties.get('EBSOptions')
         access_policies = self._resourceproperties.get('AccessPolicies')
@@ -49,14 +80,14 @@ class ElasticsearchCustomResource(CustomResource):
             kwargs['SnapshotOptions'] = snapshot_options
         if advanced_options:
             kwargs['AdvancedOptions'] = advanced_options
-        print kwargs
+        log.info(u"Command %s-%s sending: %s", self.logicalresourceid, self.requesttype, json.dumps(kwargs))
         response = client.create_elasticsearch_domain(**kwargs)
-        print response
+        self.processing = True
         return response.get('DomainStatus')
 
-    def update(self):
+    def update_es(self):
         client = boto3.client('es', region_name=self._region)
-        domain_name = self._resourceproperties.get('DomainName')
+        domain_name = self.result_text.get('DomainName')
         cluster_config = self._resourceproperties.get('ElasticsearchClusterConfig')
         ebs_options = self._resourceproperties.get('EBSOptions')
         access_policies = self._resourceproperties.get('AccessPolicies')
@@ -70,17 +101,47 @@ class ElasticsearchCustomResource(CustomResource):
             SnapshotOptions = snapshot_options,
             AdvancedOptions = advanced_options
         )
+        self.processing = True
         return response.get('DomainStatus')
 
-    def delete(self):
+    def delete_es(self):
         client = boto3.client('es', region_name=self._region)
-        domain_name = self._resourceproperties.get('DomainName')
+        domain_name = self.result_text.get('DomainName')
         response = client.delete_elasticsearch_domain(DomainName = domain_name)
+        self.processing = True
         return response.get('DomainStatus')
+
+    def create(self):
+        if self.processing:
+            return self.get_status()
+        else:
+            return self.create_es()
+
+    def update(self):
+        if self.processing:
+            return self.get_status()
+        else:
+            return self.update_es()
+
+    def delete(self):
+        if self.processing:
+            return self.get_status()
+        else:
+            return self.delete_es()
 
 
 def lambda_handler(event, context):
     log.info("Received event : {}".format(event))
-    resource = ElasticsearchCustomResource(event)
+    log.info("Event: {}".format(json.dumps(event)))
+
+    context_json = context.__dict__
+    context_json['remaining_time'] = context.get_remaining_time_in_millis()
+    if 'identity' in context_json.keys():
+        context_json.pop('identity')
+    if 'client_context' in context_json.keys():
+        context_json.pop('client_context')
+    log.info("Context: {}".format(json.dumps(context_json)))
+
+    resource = ElasticsearchCustomResource(event, context)
     resource.process_event()
     return { 'message': 'done' }

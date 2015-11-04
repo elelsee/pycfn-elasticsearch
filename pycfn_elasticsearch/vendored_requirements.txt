@@ -1,2 +1,3 @@
-https://github.com/elelsee/lambda-customresource/archive/master.zip
+#https://github.com/elelsee/lambda-customresource/archive/master.zip
 boto3==1.1.4
+https://github.com/elelsee/pycfn-custom-resource/archive/add-cfn-wait.zip
