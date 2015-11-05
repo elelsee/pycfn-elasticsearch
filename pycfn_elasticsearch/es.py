@@ -28,12 +28,13 @@ class ElasticsearchCustomResource(CustomResource):
     def describe_domain(self):
         client = boto3.client('es', region_name=self._region)
         domain_name = self.result_text.get('DomainName')
+        domain_name = domain_name if domain_name else self.physicalresourceid
         try:
             response = client.describe_elasticsearch_domain(DomainName=domain_name)
             return response.get('DomainStatus')
         except ClientError:
             e = sys.exc_info()[1]
-            message = x.response['Error']['Message']
+            message = e.response['Error']['Message']
             if self.requesttype == "Delete" and message.startswith('Domain not found'):
                 return { 'Processing': False }
             else:
@@ -51,7 +52,6 @@ class ElasticsearchCustomResource(CustomResource):
         return ''.join(random.choice(ascii_lowercase) for _ in range(15))
 
     def create_es(self):
-        client = boto3.client('es', region_name=self._region)
         domain_name = self._resourceproperties.get('DomainName')
         domain_name = domain_name if domain_name else self.get_domain_name()
         log.info(u"Command %s-%s using Domain Name %s", self.logicalresourceid, self.requesttype, domain_name)
@@ -60,7 +60,7 @@ class ElasticsearchCustomResource(CustomResource):
         access_policies = self._resourceproperties.get('AccessPolicies')
         snapshot_options = self._resourceproperties.get('SnapshotOptions')
         advanced_options = self._resourceproperties.get('AdvancedOptions')
-        kwargs = { "DomainName" : str(domain_name).lower() }
+        kwargs = { "DomainName" : domain_name }
         if cluster_config:
             if cluster_config.get('DedicatedMasterEnabled'):
                 cluster_config['DedicatedMasterEnabled'] = convert_type_bool(cluster_config['DedicatedMasterEnabled'])
@@ -81,7 +81,9 @@ class ElasticsearchCustomResource(CustomResource):
         if advanced_options:
             kwargs['AdvancedOptions'] = advanced_options
         log.info(u"Command %s-%s sending: %s", self.logicalresourceid, self.requesttype, json.dumps(kwargs))
+        client = boto3.client('es', region_name=self._region)
         response = client.create_elasticsearch_domain(**kwargs)
+        self._physicalresourceid = domain_name
         self.processing = True
         return response.get('DomainStatus')
 
@@ -106,7 +108,7 @@ class ElasticsearchCustomResource(CustomResource):
 
     def delete_es(self):
         client = boto3.client('es', region_name=self._region)
-        domain_name = self.result_text.get('DomainName')
+        domain_name = self.physicalresourceid
         response = client.delete_elasticsearch_domain(DomainName = domain_name)
         self.processing = True
         return response.get('DomainStatus')
