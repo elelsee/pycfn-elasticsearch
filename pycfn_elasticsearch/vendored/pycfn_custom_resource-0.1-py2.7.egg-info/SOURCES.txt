@@ -1,8 +1,0 @@
-pycfn_custom_resource/__init__.py
-pycfn_custom_resource/lambda_backed.py
-pycfn_custom_resource/util.py
-pycfn_custom_resource.egg-info/PKG-INFO
-pycfn_custom_resource.egg-info/SOURCES.txt
-pycfn_custom_resource.egg-info/dependency_links.txt
-pycfn_custom_resource.egg-info/requires.txt
-pycfn_custom_resource.egg-info/top_level.txt
